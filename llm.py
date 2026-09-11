@@ -7,6 +7,8 @@ import config
 
 logger = logging.getLogger(__name__)
 
+MAX_CHAT_RETRIES = 3
+
 
 class LLMAgent:
   """Google Gemini-powered conversational agent with per-user memory."""
@@ -60,14 +62,32 @@ class LLMAgent:
         logger.info(f"Expired {len(stale)} idle sessions")
 
   def chat(self, user_id, message):
-    """Send a message and return the model's raw text response."""
+    """Send a message with retry on transient errors; return raw text response."""
     chat = self.get_or_create_chat(user_id)
-    try:
-      response = chat.send_message(message)
-      return response.text.strip() if response.text else ""
-    except Exception as e:
-      logger.error(f"Gemini chat error for {user_id}: {e}")
-      raise
+    last_error = None
+    for attempt in range(MAX_CHAT_RETRIES):
+      try:
+        response = chat.send_message(message)
+        return response.text.strip() if response.text else ""
+      except Exception as e:
+        last_error = e
+        if not self._is_transient(e):
+          logger.error(f"Gemini chat error for {user_id}: {e}")
+          raise
+        wait = min(2 ** attempt * 2, 30)
+        logger.warning(
+            f"Gemini transient error for {user_id} (attempt {attempt + 1}/"
+            f"{MAX_CHAT_RETRIES}): {e} — retrying in {wait}s")
+        time.sleep(wait)
+    raise last_error
+
+  @staticmethod
+  def _is_transient(error):
+    """Return True for 429/5xx/network errors where a retry may succeed."""
+    status = getattr(error, "status_code", None)
+    if status is not None:
+      return status == 429 or 500 <= status < 600
+    return isinstance(error, (ConnectionError, TimeoutError))
 
   def reset_chat(self, user_id):
     self._sessions.pop(user_id, None)
@@ -84,24 +104,53 @@ class LLMAgent:
     if not response_text:
       return None
 
-    text = response_text.strip()
-
-    try:
-      data = json.loads(text)
-      if isinstance(data, dict) and data.get("action") in ("generate_image", "generate_document"):
-        return data
-    except json.JSONDecodeError:
-      pass
-
-    match = re.search(r'\{[^{}]*"action"\s*:\s*"[^{}]*\"[^{}]*\}', text)
-    if match:
+    candidates = self._extract_json_candidates(response_text)
+    for candidate in candidates:
       try:
-        data = json.loads(match.group(0))
+        data = json.loads(candidate)
         if isinstance(data, dict) and data.get("action") in ("generate_image", "generate_document"):
           return data
       except json.JSONDecodeError:
-        pass
+        continue
+    return None
 
+  def _extract_json_candidates(self, text):
+    """Yield plausible JSON substrings: raw, fenced, and brace-balanced blocks."""
+    text = text.strip()
+    yield text
+
+    fence = re.search(r'```(?:json)?\s*(.*?)```', text, re.DOTALL | re.IGNORECASE)
+    if fence:
+      yield fence.group(1).strip()
+
+    for match in re.finditer(r'\{', text):
+      candidate = self._balanced_json(text, match.start())
+      if candidate:
+        yield candidate
+
+  def _balanced_json(self, text, start):
+    """Return the brace-balanced substring starting at text[start] if it ends cleanly."""
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+      char = text[i]
+      if in_string:
+        if escape:
+          escape = False
+        elif char == "\\":
+          escape = True
+        elif char == '"':
+          in_string = False
+        continue
+      if char == '"':
+        in_string = True
+      elif char == "{":
+        depth += 1
+      elif char == "}":
+        depth -= 1
+        if depth == 0:
+          return text[start:i + 1]
     return None
 
   def reply(self, user_id, message):

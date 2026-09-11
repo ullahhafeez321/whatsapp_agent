@@ -128,7 +128,10 @@ def handle_incoming_messages(messages):
         _handle_text_message(sender_id, message_id, text)
       except Exception:
         logger.exception(f"Unhandled error processing message {message_id} from {sender_id}")
-        whatsapp.send_text(sender_id, "I ran into an unexpected error. Please try again.")
+        whatsapp.send_text(
+            sender_id,
+            "I'm having trouble reaching my AI right now (likely high demand). "
+            "Please try again in a moment. 🙏")
 
     elif msg_type in ("image", "audio", "video", "document", "sticker", "location", "contacts"):
       whatsapp.mark_read_and_typing(message_id)

@@ -6,7 +6,7 @@ load_dotenv()
 API_TOKEN = os.getenv("WHATSAPP_API_TOKEN")
 BASE_URL = os.getenv("WHATSAPP_BASE_URL", "https://api.whatsapp.com/agent/v1")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 HEADERS = {
     "Authorization": f"Bearer {API_TOKEN}",

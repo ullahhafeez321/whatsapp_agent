@@ -68,7 +68,7 @@ def main():
   if not config.API_TOKEN:
     logger.error("WHATSAPP_API_TOKEN is not set in .env. Exiting.")
     sys.exit(1)
-  if not config.GEMINI_API_KEY or config.GEMINI_API_KEY == "your_gemini_api_key_here":
+  if not config.GEMINI_API_KEY or "your_gemini_api_key" in config.GEMINI_API_KEY:
     logger.error(
         "GEMINI_API_KEY is not set in .env (get a free key at "
         "https://aistudio.google.com/app/apikeys). Exiting."
