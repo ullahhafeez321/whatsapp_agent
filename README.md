@@ -57,7 +57,56 @@ whatsapp.py     WhatsApp gateway API client (text/image/document)
 image_gen.py    Pollinations.ai image generation
 docx_gen.py     Word document generation (python-docx)
 config.py       Environment configuration
+deploy/         Oracle Cloud Always Free installer + systemd service
 ```
+
+## Free 24/7 hosting (Oracle Cloud Always Free)
+
+The agent long-polls the WhatsApp gateway, so it must run on an always-on
+server — a free host that sleeps on idle (Render, Glitch, Replit) will not
+work. Oracle Cloud's **Always Free** VM tier is a good fit: two micro VMs
+forever, no cost, never sleeps. No Docker needed.
+
+### 1. Create the VM
+
+1. Sign up at <https://www.oracle.com/cloud/free/>
+2. Create a **Compute → Instance** with shape **VM.Standard.A1.Flex** (ARM,
+   always free) or **VM.Standard.E2.1.Micro** (AMD, always free). 1 OCPU +
+   1 GB RAM is plenty.
+3. Use an **Ubuntu 22.04/24.04** image.
+4. **Important:** add your SSH public key during instance creation so you can
+   log in. Ensure the default security list keeps **port 22 open**.
+5. After creation, note the public IP.
+
+### 2. Run the installer
+
+```bash
+ssh ubuntu@<your-vm-public-ip>
+
+# One-liner: download and run the installer, passed your keys:
+sudo GEMINI_API_KEY=your_gemini_key WHATSAPP_API_TOKEN=your_token \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/ullahhafeez321/whatsapp_agent/main/deploy/install.sh)"
+```
+
+Or clone manually and edit keys first:
+
+```bash
+git clone https://github.com/ullahhafeez321/whatsapp_agent.git
+cd whatsapp_agent
+nano .env          # paste GEMINI_API_KEY and WHATSAPP_API_TOKEN
+sudo bash deploy/install.sh
+```
+
+### 3. Daily use
+
+```bash
+sudo systemctl status whatsapp-agent     # status
+sudo journalctl -u whatsapp-agent -f     # live logs
+sudo systemctl restart whatsapp-agent    # restart
+```
+
+The service restarts automatically if the process crashes, and starts on boot.
+The VM only needs outbound internet — no inbound ports beyond SSH.
 
 ## License
 

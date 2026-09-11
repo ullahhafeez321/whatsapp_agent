@@ -1,0 +1,18 @@
+[Unit]
+Description=WhatsApp AI Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=whatsapp
+Group=whatsapp
+WorkingDirectory=/opt/whatsapp_agent
+EnvironmentFile=/opt/whatsapp_agent/.env
+ExecStart=/opt/whatsapp_agent/venv/bin/python3 /opt/whatsapp_agent/app.py
+Restart=always
+RestartSec=5
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
